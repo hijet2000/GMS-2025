@@ -1,9 +1,11 @@
 // User and Authentication
+export type UserRole = 'Manager' | 'Technician' | 'Admin';
 export interface User {
   id: string;
   name: string;
   email: string;
   tenantId: string;
+  role: UserRole;
 }
 
 // Subscription and Billing
@@ -166,4 +168,15 @@ export interface GarageSettings {
   email: string;
   vatRate: number; // Stored as a percentage, e.g., 20 for 20%
   invoiceNotes: string;
+}
+
+// Offline Sync
+export interface SyncAction {
+    id: string;
+    type: 'UPDATE_INVENTORY_ITEM';
+    payload: {
+        itemId: string;
+        updates: Partial<InventoryItem>;
+    };
+    timestamp: string;
 }

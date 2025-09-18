@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI, Type } from '@google/genai';
 import { mockApi } from '../services/mockApi';
 import { VehicleDetails, Customer, AiAssistedDiagnosis, MotHistoryItem } from '../types';
-import { SearchIcon, SparklesIcon, UserPlusIcon, ExclamationTriangleIcon } from '../components/icons';
+import { SearchIcon, SparklesIcon, UserPlusIcon, ExclamationTriangleIcon, CameraIcon } from '../components/icons';
+import CameraScanner from '../components/CameraScanner';
 
 // --- Reusable Components ---
 const Section: React.FC<{ title: string; step: number; children: React.ReactNode; isComplete: boolean; isDisabled: boolean }> = ({ title, step, children, isComplete, isDisabled }) => (
@@ -14,7 +15,7 @@ const Section: React.FC<{ title: string; step: number; children: React.ReactNode
             </div>
             <h2 className="text-xl font-bold text-gray-800">{title}</h2>
         </div>
-        {!isDisabled && <div className="pl-12">{children}</div>}
+        {!isDisabled && <div className="md:pl-12">{children}</div>}
     </div>
 );
 
@@ -77,18 +78,18 @@ const CheckInPage: React.FC = () => {
     const [isUrgent, setIsUrgent] = useState(false);
     
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
 
     const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
 
-    const handleVrmLookup = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!vrm) return;
+    const handleVrmLookup = async (lookupVrm: string) => {
+        if (!lookupVrm) return;
         setIsVehicleLoading(true);
         setVehicleError('');
         setVehicle(null);
         setShowManualEntry(false);
         try {
-            const result = await mockApi.getVehicleDetails(vrm);
+            const result = await mockApi.getVehicleDetails(lookupVrm);
             if (result) {
                 await checkForDuplicates(result.vrm);
                 setVehicle(result);
@@ -100,6 +101,17 @@ const CheckInPage: React.FC = () => {
         } finally {
             setIsVehicleLoading(false);
         }
+    };
+
+    const handleVrmSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        handleVrmLookup(vrm);
+    };
+
+    const handleScanSuccess = (scannedVrm: string) => {
+        setIsScanning(false);
+        setVrm(scannedVrm);
+        handleVrmLookup(scannedVrm);
     };
     
     const handleManualVehicleSubmit = async (manualVehicle: Omit<VehicleDetails, 'motHistory' | 'motStatus' | 'motExpiry' | 'taxStatus'>) => {
@@ -213,26 +225,34 @@ const CheckInPage: React.FC = () => {
         }
     };
 
+    if (isScanning) {
+        return <CameraScanner mode="vrm" onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />;
+    }
+
     return (
         <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6">Vehicle Check-In</h1>
             <div className="space-y-6">
                 
                 <Section title="Vehicle Information" step={1} isComplete={!!vehicle} isDisabled={false}>
-                    <form onSubmit={handleVrmLookup}>
-                        <p className="mb-2 text-sm text-gray-600">Enter the Vehicle Registration Mark (VRM) to look up details.</p>
+                    <p className="mb-2 text-sm text-gray-600">Enter the Vehicle Registration Mark (VRM) to look up details.</p>
+                    <form onSubmit={handleVrmSubmit} className="flex flex-col sm:flex-row gap-2">
+                         <input
+                            type="text"
+                            name="vrm"
+                            value={vrm}
+                            onChange={e => setVrm(e.target.value.toUpperCase())}
+                            placeholder="e.g., AB12 CDE"
+                            className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
                         <div className="flex gap-2">
-                             <input
-                                type="text"
-                                name="vrm"
-                                value={vrm}
-                                onChange={e => setVrm(e.target.value.toUpperCase())}
-                                placeholder="e.g., AB12 CDE"
-                                className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            />
-                            <button type="submit" disabled={isVehicleLoading || !vrm} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300">
-                                {isVehicleLoading ? 'Searching...' : 'Search'}
-                            </button>
+                           <button type="button" onClick={() => setIsScanning(true)} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                               <CameraIcon className="w-5 h-5" />
+                               <span>Scan</span>
+                           </button>
+                           <button type="submit" disabled={isVehicleLoading || !vrm} className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300">
+                               {isVehicleLoading ? 'Searching...' : 'Search'}
+                           </button>
                         </div>
                     </form>
                     {vehicleError && <p className="text-red-500 text-sm mt-2">{vehicleError}</p>}
@@ -240,7 +260,7 @@ const CheckInPage: React.FC = () => {
                     {vehicle && (
                         <div className="mt-4 p-4 border rounded-lg bg-gray-50">
                             <h3 className="font-bold text-lg">{vehicle.make} {vehicle.model} - {vehicle.vrm}</h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2 items-center">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2 items-start">
                                 <div><strong>Year:</strong> {vehicle.year}</div>
                                 <div><strong>Colour:</strong> {vehicle.colour}</div>
                                 <div className="flex items-center gap-2"><strong>MOT:</strong> <VehicleStatusBadge status={vehicle.motStatus} /> <span className="text-gray-600">({vehicle.motExpiry})</span></div>
@@ -286,15 +306,15 @@ const CheckInPage: React.FC = () => {
                         placeholder="e.g., Grinding noise when braking at low speed. Pulls to the left."
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <div className="flex justify-between items-start mt-2">
+                    <div className="flex flex-col sm:flex-row justify-between items-start mt-2 gap-4">
                         <button 
                             onClick={handleGetDiagnosis} disabled={isAiLoading || issue.length < 10}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-purple-300"
+                            className="flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-purple-300"
                         >
                             <SparklesIcon />
                             {isAiLoading ? 'Analyzing...' : 'AI Assist'}
                         </button>
-                        <div className="flex items-center">
+                        <div className="flex items-center self-end sm:self-center">
                             <input type="checkbox" id="urgent" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500" />
                             <label htmlFor="urgent" className="ml-2 block text-sm font-medium text-gray-700">Mark as Urgent</label>
                         </div>

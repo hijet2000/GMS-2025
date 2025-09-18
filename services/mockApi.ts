@@ -1,4 +1,5 @@
 
+
 import { 
     User, Subscription, PlanId, SubscriptionStatus, DashboardData, 
     WorkOrder, WorkOrderStatus, VehicleDetails, MotHistoryItem, Customer, WorkOrderLineItem, WorkOrderNote, TimeLog, LineItemType,
@@ -7,6 +8,7 @@ import {
 import { Chance } from 'chance';
 import { formatISO } from 'date-fns';
 import { calculateWorkOrderTotals } from '../utils/money';
+import { syncQueue } from './syncQueue';
 
 
 const chance = new Chance(12345); // Seeded for consistency
@@ -54,7 +56,7 @@ const seedData = () => {
     DB = { users: [], subscriptions: [], workOrders: [], customers: [], vehicles: {}, inventory: [], garageSettings: {} as GarageSettings };
 
     // User
-    const user: User = { id: 'user_1', name: 'Alex Workshop', email: 'workshop@example.com', tenantId: 'tenant_1' };
+    const user: User = { id: 'user_1', name: 'Alex Workshop', email: 'workshop@example.com', tenantId: 'tenant_1', role: 'Manager' };
     DB.users.push(user);
 
     // Subscription
@@ -460,6 +462,7 @@ class MockApi {
     async checkForOpenWorkOrders(vrm: string): Promise<boolean> {
         await delay(300);
         const openStatuses = [WorkOrderStatus.NEW, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.AWAITING_CUSTOMER, WorkOrderStatus.AWAITING_PARTS, WorkOrderStatus.READY];
+        // FIX: Replaced `and` with the correct logical operator `&&`.
         return DB.workOrders.some(wo => wo.vrm.toUpperCase() === vrm.toUpperCase() && openStatuses.includes(wo.status));
     }
     
@@ -518,6 +521,18 @@ class MockApi {
     }
 
     async updateInventoryItem(itemId: string, updates: Partial<InventoryItem>): Promise<InventoryItem> {
+        if (!navigator.onLine) {
+            console.log('Offline: Queuing inventory update.');
+            syncQueue.addAction({
+                type: 'UPDATE_INVENTORY_ITEM',
+                payload: { itemId, updates }
+            });
+            // Optimistic update
+            const itemIndex = DB.inventory.findIndex(item => item.id === itemId);
+            DB.inventory[itemIndex] = { ...DB.inventory[itemIndex], ...updates };
+            return DB.inventory[itemIndex];
+        }
+
         await delay(400);
         const itemIndex = DB.inventory.findIndex(item => item.id === itemId);
         if (itemIndex === -1) throw new Error("Inventory item not found");

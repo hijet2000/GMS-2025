@@ -159,11 +159,40 @@ const WorkOrdersPage: React.FC = () => {
             <td className="px-6 py-4">{new Date(workOrder.lastUpdatedAt).toLocaleString()}</td>
             <td className="px-6 py-4">{new Date(workOrder.createdAt).toLocaleDateString()}</td>
             <td className="px-6 py-4 text-right font-medium">{formatGbp(grossTotal)}</td>
-            <td className="px-6 py-4 text-center">...</td>
+            <td className="px-6 py-4 text-center">
+                <Link to={`/app/work-orders/${workOrder.id}`} className="text-blue-600 hover:underline text-sm">View</Link>
+            </td>
         </tr>
     );
   };
   
+    const WorkOrderCard: React.FC<{ workOrder: WorkOrder }> = ({ workOrder }) => {
+    const grossTotal = useMemo(() => {
+        if (!settings) return 0;
+        return calculateWorkOrderTotals(workOrder.lineItems, settings.vatRate).gross;
+    }, [workOrder.lineItems, settings]);
+
+    return (
+        <Link to={`/app/work-orders/${workOrder.id}`} className="block bg-white border rounded-lg p-4 hover:bg-gray-50 shadow-sm">
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="font-bold text-blue-600">{workOrder.id}</p>
+                    <p className="text-lg font-semibold">{workOrder.customerName}</p>
+                    <p className="text-sm text-gray-600">{workOrder.vrm}</p>
+                </div>
+                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusColors[workOrder.status]}`}>{workOrder.status}</span>
+            </div>
+            <div className="mt-4 flex justify-between items-end">
+                <div className="text-sm text-gray-500">
+                    <p>Last updated:</p>
+                    <p>{new Date(workOrder.lastUpdatedAt).toLocaleString()}</p>
+                </div>
+                <p className="text-lg font-bold">{formatGbp(grossTotal)}</p>
+            </div>
+        </Link>
+    );
+  };
+
   const StatusFilterDropdown: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -184,7 +213,7 @@ const WorkOrdersPage: React.FC = () => {
 
     return (
         <div className="relative" ref={dropdownRef}>
-            <button onClick={() => setIsOpen(!isOpen)} className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+            <button onClick={() => setIsOpen(!isOpen)} className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 w-full sm:w-auto">
                 Status {statusFilter.length > 0 && `(${statusFilter.length})`}
                 <ChevronDownIcon className="-mr-1 ml-2 h-5 w-5" />
             </button>
@@ -215,27 +244,37 @@ const WorkOrdersPage: React.FC = () => {
 
   return (
     <div>
-      <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Work Orders</h1>
-        <div className="flex items-center gap-4">
-            <div className="relative">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+            <div className="relative flex-grow">
                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                  <input
                     type="text"
                     placeholder="Search ID, VRM, Customer..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-64 rounded-md border-gray-300 pl-10 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full rounded-md border-gray-300 pl-10 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 />
             </div>
             <StatusFilterDropdown />
-            <Link to="/app/check-in" className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">
+            <Link to="/app/check-in" className="px-4 py-2 text-center bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">
                 New Check-In
             </Link>
         </div>
       </div>
 
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+        {/* Mobile View - Cards */}
+        <div className="md:hidden space-y-4">
+             {isLoading ? (
+                 <p className="text-center py-10">Loading work orders...</p>
+             ) : (
+                filteredAndSortedWorkOrders.map(wo => <WorkOrderCard key={wo.id} workOrder={wo} />)
+             )}
+        </div>
+
+      {/* Desktop View - Table */}
+      <div className="bg-white shadow-md rounded-lg overflow-hidden hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left text-gray-700">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50">

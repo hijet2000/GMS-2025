@@ -145,3 +145,16 @@ export const DocumentDuplicateIcon: React.FC<{ className?: string }> = ({ classN
     <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
   </Icon>
 );
+
+export const CameraIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <Icon className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+  </Icon>
+);
+
+export const WifiIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <Icon className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.5 5.5 0 017.424 0M5.152 11.892a9 9 0 0113.696 0M2 8.748a12.5 12.5 0 0119.998 0" />
+  </Icon>
+);

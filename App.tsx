@@ -11,6 +11,15 @@ import CheckInPage from './pages/CheckIn';
 import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import InventoryPage from './pages/Inventory';
 import SettingsPage from './pages/Settings';
+import { syncQueue } from './services/syncQueue';
+
+// --- OFFLINE/SYNC CONTEXT ---
+interface SyncContextType {
+  isOnline: boolean;
+  pendingActionCount: number;
+}
+const SyncContext = createContext<SyncContextType>({ isOnline: true, pendingActionCount: 0 });
+export const useSync = () => useContext(SyncContext);
 
 // --- AUTH CONTEXT ---
 interface AuthContextType {
@@ -25,6 +34,47 @@ export const useAuth = () => useContext(AuthContext)!;
 const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingActionCount, setPendingActionCount] = useState(syncQueue.getQueue().length);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const handleQueueChange = () => {
+        setPendingActionCount(syncQueue.getQueue().length);
+    };
+    syncQueue.subscribe(handleQueueChange);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      syncQueue.unsubscribe(handleQueueChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const processSyncQueue = async () => {
+        if (isOnline && syncQueue.getQueue().length > 0) {
+            console.log('Online, processing sync queue...');
+            const actions = syncQueue.getQueue();
+            for (const action of actions) {
+                try {
+                    if (action.type === 'UPDATE_INVENTORY_ITEM') {
+                        await mockApi.updateInventoryItem(action.payload.itemId, action.payload.updates);
+                    }
+                    syncQueue.removeAction(action.id);
+                } catch (error) {
+                    console.error('Failed to sync action:', action, error);
+                }
+            }
+        }
+    };
+    processSyncQueue();
+  }, [isOnline]);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -51,7 +101,9 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   return (
     <AuthContext.Provider value={{ user, isLoading, login, logout }}>
-      {children}
+        <SyncContext.Provider value={{ isOnline, pendingActionCount }}>
+            {children}
+        </SyncContext.Provider>
     </AuthContext.Provider>
   );
 };

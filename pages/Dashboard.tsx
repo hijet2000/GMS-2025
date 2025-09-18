@@ -125,20 +125,20 @@ const DashboardPage: React.FC = () => {
             </>
         )}
 
-      <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
             <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
             <p className="text-gray-600 mt-1">Hello {user?.name.split(' ')[0]}, here's your workshop overview.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
             <DateRangeSelector selected={dateRange} onSelect={setDateRange} />
             <button
                 onClick={() => setIsAiModalOpen(true)}
                 disabled={isLoading || !data}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-purple-300"
+                className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-purple-300"
             >
                 <SparklesIcon />
-                Ask AI
+                <span>Ask AI</span>
             </button>
         </div>
       </div>
