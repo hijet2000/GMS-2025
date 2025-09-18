@@ -1,0 +1,5 @@
+{
+  "name": "Garage Management System",
+  "description": "A subscription-based single-page application for UK vehicle repair workshops to manage their daily operations, including work orders, inventory, and billing.",
+  "requestFramePermissions": []
+}
