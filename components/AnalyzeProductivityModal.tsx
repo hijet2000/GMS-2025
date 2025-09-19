@@ -1,12 +1,13 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { ChartBarIcon } from './icons';
+import { TechnicianProductivity } from '../types';
 
 interface AnalyzeProductivityModalProps {
   isOpen: boolean;
   onClose: () => void;
-  productivityData: any[];
-  // FIX: Added 'day' to the dateRange type to match the possible values from the Dashboard page.
+  productivityData: TechnicianProductivity[];
   dateRange: 'day' | 'week' | 'month';
 }
 

@@ -158,3 +158,15 @@ export const WifiIcon: React.FC<{ className?: string }> = ({ className }) => (
       <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.5 5.5 0 017.424 0M5.152 11.892a9 9 0 0113.696 0M2 8.748a12.5 12.5 0 0119.998 0" />
   </Icon>
 );
+
+export const QrCodeIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586m12.828 0H20a1 1 0 011 1v4a1 1 0 01-1 1h-1.586M15 5.586V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v1.586m0 12.828V20a1 1 0 001 1h4a1 1 0 001-1v-1.586M9 12h6" />
+    </Icon>
+);
+
+export const UsersIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <Icon className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm6-11a4 4 0 11-8 0 4 4 0 018 0z" />
+  </Icon>
+);

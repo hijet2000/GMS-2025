@@ -3,7 +3,8 @@
 import { 
     User, Subscription, PlanId, SubscriptionStatus, DashboardData, 
     WorkOrder, WorkOrderStatus, VehicleDetails, MotHistoryItem, Customer, WorkOrderLineItem, WorkOrderNote, TimeLog, LineItemType,
-    InventoryItem, GarageSettings
+    InventoryItem, GarageSettings, Employee, EmployeeRole, EmployeePayType, EmployeeStatus, Plan,
+    TimePolicy, OvertimeRule, RoundingStrategy
 } from '../types';
 import { Chance } from 'chance';
 import { formatISO } from 'date-fns';
@@ -12,6 +13,13 @@ import { syncQueue } from './syncQueue';
 
 
 const chance = new Chance(12345); // Seeded for consistency
+
+const PLANS: Record<PlanId, Plan> = {
+  [PlanId.BASIC]: { id: PlanId.BASIC, name: 'Basic', price: 29, userLimit: 2, features: [] },
+  [PlanId.STANDARD]: { id: PlanId.STANDARD, name: 'Standard', price: 59, userLimit: 5, features: [] },
+  [PlanId.PRO]: { id: PlanId.PRO, name: 'Pro', price: 99, userLimit: 'unlimited', features: [] },
+};
+
 
 // --- DATABASE ---
 let DB: {
@@ -22,6 +30,7 @@ let DB: {
     vehicles: Record<string, VehicleDetails>;
     inventory: InventoryItem[];
     garageSettings: GarageSettings;
+    employees: Employee[];
 } = {
     users: [],
     subscriptions: [],
@@ -30,6 +39,7 @@ let DB: {
     vehicles: {},
     inventory: [],
     garageSettings: {} as GarageSettings, // Initialized in seedData
+    employees: [],
 };
 
 const TECHNICIANS = ['Bob M.', 'Sarah T.', 'Dave C.'];
@@ -53,11 +63,12 @@ const getStartOfMonth = (d: Date) => {
 // --- SEED DATA ---
 const seedData = () => {
     // Reset DB
-    DB = { users: [], subscriptions: [], workOrders: [], customers: [], vehicles: {}, inventory: [], garageSettings: {} as GarageSettings };
+    DB = { users: [], subscriptions: [], workOrders: [], customers: [], vehicles: {}, inventory: [], garageSettings: {} as GarageSettings, employees: [] };
 
-    // User
-    const user: User = { id: 'user_1', name: 'Alex Workshop', email: 'workshop@example.com', tenantId: 'tenant_1', role: 'Manager' };
-    DB.users.push(user);
+    // Users
+    const manager: User = { id: 'user_1', name: 'Alex Workshop', email: 'workshop@example.com', tenantId: 'tenant_1', role: 'Manager' };
+    const technician: User = { id: 'user_2', name: 'Sarah Tech', email: 'tech@example.com', tenantId: 'tenant_1', role: 'Technician' };
+    DB.users.push(manager, technician);
 
     // Subscription
     const trialEnds = new Date();
@@ -79,9 +90,7 @@ const seedData = () => {
     const statuses = Object.values(WorkOrderStatus);
     for (let i = 0; i < 205; i++) { // Increased to 200+
         const customer = chance.pickone(DB.customers);
-        // FIX: Add type annotation to ensure createdAt is treated as a Date object.
         const createdAt: Date = chance.date({ year: new Date().getFullYear() });
-        // FIX: Add type annotation to ensure lastUpdatedAt is treated as a Date object.
         const lastUpdatedAt: Date = chance.date({ year: createdAt.getFullYear(), month: createdAt.getMonth(), day: createdAt.getDate() + chance.integer({min: 0, max: 5})});
         const isUrgent = chance.bool({ likelihood: 20 });
         
@@ -97,13 +106,11 @@ const seedData = () => {
             switch (type) {
                 case 'part':
                     quantity = chance.integer({ min: 1, max: 4 });
-                    // FIX: Removed incorrect `parseFloat` call. `chance.floating` already returns a number.
-                    unitPrice = chance.floating({ min: 1000, max: 25000, fixed: 0 }); // Pence
+                    unitPrice = chance.integer({ min: 1000, max: 25000 }); // Pence
                     description = `Part - ${chance.capitalize(chance.word())} ${chance.capitalize(chance.word())}`;
                     break;
                 case 'labour':
-                    // FIX: Removed incorrect `parseFloat` call. `chance.floating` already returns a number.
-                    quantity = chance.floating({ min: 0.5, max: 4, fixed: 2 });
+                    quantity = parseFloat(chance.floating({ min: 0.5, max: 4, fixed: 2 }));
                     unitPrice = 7500; // Pence
                     description = `Labour - ${chance.sentence({ words: 3 })}`;
                     break;
@@ -144,12 +151,13 @@ const seedData = () => {
         const notes: WorkOrderNote[] = [];
         const numNotes = chance.integer({min: 0, max: 3});
         for (let k = 0; k < numNotes; k++) {
+            const noteDate = new Date(createdAt);
+            noteDate.setDate(noteDate.getDate() + k);
             notes.push({
                 id: `note_${i}_${k}`,
                 author: chance.pickone(['Alex Workshop', 'Bob M.']),
                 content: chance.sentence(),
-                // FIX: `chance.date` returns a Date object, so `toISOString()` can be called. This was fixed by typing `createdAt`.
-                timestamp: chance.date({year: createdAt.getFullYear(), month: createdAt.getMonth(), day: createdAt.getDate() + k}).toISOString()
+                timestamp: noteDate.toISOString()
             });
         }
         
@@ -158,7 +166,6 @@ const seedData = () => {
         DB.workOrders.push({
             id: `WO-${1000 + i}`,
             status: chance.pickone(statuses),
-            // FIX: Type annotations on createdAt and lastUpdatedAt ensure `toISOString` is available.
             createdAt: createdAt.toISOString(),
             lastUpdatedAt: lastUpdatedAt.toISOString(),
             customerName: customer.name,
@@ -178,6 +185,7 @@ const seedData = () => {
     // Inventory
     const brands = ['Bosch', 'Mann', 'Filtron', 'NGK', 'Brembo', 'TRW', 'Febi Bilstein'];
     const partTypes = ['Brake Pads', 'Oil Filter', 'Air Filter', 'Spark Plug', 'Brake Disc', 'Wiper Blade', 'Timing Belt Kit'];
+    const multiMatchSku = 'MUL-TI-1234';
     for (let i = 0; i < 50; i++) {
         const brand = chance.pickone(brands);
         const type = chance.pickone(partTypes);
@@ -193,6 +201,26 @@ const seedData = () => {
             price: chance.integer({min: 500, max: 15000}), // pence
         });
     }
+    // Add items for multi-match testing
+     DB.inventory.push({
+        id: `inv_998`,
+        sku: multiMatchSku,
+        name: `Brake Pads (OEM)`,
+        brand: 'Brembo',
+        stockQty: 12,
+        lowStockThreshold: 5,
+        price: 5500,
+    });
+    DB.inventory.push({
+        id: `inv_999`,
+        sku: multiMatchSku,
+        name: `Brake Pads (Aftermarket)`,
+        brand: 'Bosch',
+        stockQty: 25,
+        lowStockThreshold: 10,
+        price: 3500,
+    });
+
 
     // Garage Settings
     DB.garageSettings = {
@@ -201,8 +229,60 @@ const seedData = () => {
         phone: '01234 567890',
         email: 'contact@autorepairpros.example.com',
         vatRate: 20,
-        invoiceNotes: 'Thank you for your business! Payment is due within 30 days. Please contact us with any questions.'
+        invoiceNotes: 'Thank you for your business! Payment is due within 30 days. Please contact us with any questions.',
+        timePolicy: {
+            timezone: 'Europe/London',
+            weekStartsOn: 1,
+            overtimeRule: OvertimeRule.WEEKLY_OVER_40,
+            standardDailyMinutes: 480, // 8 hours
+            standardWeeklyMinutes: 2400, // 40 hours
+            rounding: {
+                increment: 15,
+                strategy: RoundingStrategy.NEAREST,
+            },
+            autoBreak: {
+                defaultBreakMinutes: 30,
+                breakThresholdMinutes: 360, // 6 hours
+            },
+            version: 1,
+        }
     };
+
+    // Employees
+    DB.employees.push({
+        id: 'emp_1',
+        name: 'Bob M.',
+        email: 'bob.m@example.com',
+        phone: chance.phone(),
+        role: EmployeeRole.TECHNICIAN,
+        payType: EmployeePayType.HOURLY,
+        hourlyRatePence: 2500,
+        status: EmployeeStatus.ACTIVE,
+        startDate: '2022-01-15T00:00:00.000Z',
+        kioskPinCode: '1234'
+    }, {
+        id: 'emp_2',
+        name: 'Sarah T.',
+        email: 'sarah.t@example.com',
+        phone: chance.phone(),
+        role: EmployeeRole.TECHNICIAN,
+        payType: EmployeePayType.HOURLY,
+        hourlyRatePence: 2800,
+        status: EmployeeStatus.ACTIVE,
+        startDate: '2021-05-20T00:00:00.000Z',
+        kioskPinCode: '5678'
+    }, {
+        id: 'emp_3',
+        name: 'Alex Workshop',
+        email: 'workshop@example.com',
+        phone: chance.phone(),
+        role: EmployeeRole.MANAGER,
+        payType: EmployeePayType.SALARIED,
+        salaryAnnualPence: 4500000,
+        status: EmployeeStatus.ACTIVE,
+        startDate: '2020-02-01T00:00:00.000Z',
+        kioskPinCode: '1122'
+    });
 };
 
 seedData();
@@ -335,7 +415,7 @@ class MockApi {
         return [...DB.workOrders];
     }
 
-    async getWorkOrder(id: string): Promise<(WorkOrder & { vehicleDetails: VehicleDetails | null }) | null> {
+    async getWorkOrder(id: string): Promise<WorkOrder | null> {
         await delay(500);
         const wo = DB.workOrders.find(wo => wo.id === id);
         if (!wo) return null;
@@ -447,7 +527,6 @@ class MockApi {
             vrm: upperVrm,
             make: chance.pickone(['Ford', 'VW', 'BMW', 'Audi', 'Vauxhall']),
             model: chance.pickone(['Focus', 'Golf', '3 Series', 'A4', 'Corsa']),
-            // FIX: chance.year() returns a string, but the type expects a number. Parse it to an integer.
             year: parseInt(chance.year({min: 2010, max: 2022})),
             colour: chance.color({format: 'name'}),
             motStatus: isMotValid ? 'Valid' : 'Expired',
@@ -462,7 +541,6 @@ class MockApi {
     async checkForOpenWorkOrders(vrm: string): Promise<boolean> {
         await delay(300);
         const openStatuses = [WorkOrderStatus.NEW, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.AWAITING_CUSTOMER, WorkOrderStatus.AWAITING_PARTS, WorkOrderStatus.READY];
-        // FIX: Replaced `and` with the correct logical operator `&&`.
         return DB.workOrders.some(wo => wo.vrm.toUpperCase() === vrm.toUpperCase() && openStatuses.includes(wo.status));
     }
     
@@ -519,6 +597,16 @@ class MockApi {
         await delay(600);
         return [...DB.inventory];
     }
+    
+    async getInventoryItem(itemId: string): Promise<InventoryItem | null> {
+        await delay(300);
+        return DB.inventory.find(i => i.id === itemId) || null;
+    }
+
+    async getInventoryItemsBySku(sku: string): Promise<InventoryItem[]> {
+        await delay(400);
+        return DB.inventory.filter(item => item.sku.toLowerCase() === sku.toLowerCase());
+    }
 
     async updateInventoryItem(itemId: string, updates: Partial<InventoryItem>): Promise<InventoryItem> {
         if (!navigator.onLine) {
@@ -529,8 +617,11 @@ class MockApi {
             });
             // Optimistic update
             const itemIndex = DB.inventory.findIndex(item => item.id === itemId);
-            DB.inventory[itemIndex] = { ...DB.inventory[itemIndex], ...updates };
-            return DB.inventory[itemIndex];
+            if(itemIndex > -1) {
+              DB.inventory[itemIndex] = { ...DB.inventory[itemIndex], ...updates };
+              return DB.inventory[itemIndex];
+            }
+            throw new Error("Item not found for optimistic update");
         }
 
         await delay(400);
@@ -555,6 +646,75 @@ class MockApi {
         await delay(800);
         DB.garageSettings = { ...settings };
         return { ...DB.garageSettings };
+    }
+
+    // --- HR / Employee Methods ---
+    async getEmployees(): Promise<Employee[]> {
+        await delay(500);
+        return [...DB.employees];
+    }
+
+    async getEmployee(employeeId: string): Promise<Employee | null> {
+        await delay(300);
+        return DB.employees.find(e => e.id === employeeId) || null;
+    }
+    
+    private async checkEmployeeLimit(): Promise<{ canAdd: boolean, limit: number | 'unlimited' }> {
+        const sub = await this.getSubscription('tenant_1');
+        if (!sub) return { canAdd: false, limit: 0 };
+
+        const plan = PLANS[sub.planId];
+        if (plan.userLimit === 'unlimited') {
+            return { canAdd: true, limit: 'unlimited' };
+        }
+        
+        const activeEmployees = DB.employees.filter(e => e.status === EmployeeStatus.ACTIVE).length;
+        return { canAdd: activeEmployees < plan.userLimit, limit: plan.userLimit };
+    }
+
+    async createEmployee(employeeData: Omit<Employee, 'id'>): Promise<Employee> {
+        await delay(800);
+        
+        if(employeeData.status === EmployeeStatus.ACTIVE) {
+            const { canAdd } = await this.checkEmployeeLimit();
+            if(!canAdd) {
+                throw new Error("Cannot add new active employee. Subscription plan limit reached.");
+            }
+        }
+
+        const newEmployee: Employee = {
+            id: `emp_${DB.employees.length + 1}`,
+            ...employeeData,
+        };
+        DB.employees.push(newEmployee);
+        return newEmployee;
+    }
+
+    async updateEmployee(employeeId: string, updates: Partial<Employee>): Promise<Employee> {
+        await delay(600);
+        const employeeIndex = DB.employees.findIndex(e => e.id === employeeId);
+        if (employeeIndex === -1) throw new Error("Employee not found");
+        
+        const originalStatus = DB.employees[employeeIndex].status;
+        const newStatus = updates.status;
+
+        if (newStatus === EmployeeStatus.ACTIVE && originalStatus !== EmployeeStatus.ACTIVE) {
+            const { canAdd } = await this.checkEmployeeLimit();
+            if (!canAdd) {
+                throw new Error("Cannot activate employee. Subscription plan limit reached.");
+            }
+        }
+
+        DB.employees[employeeIndex] = { ...DB.employees[employeeIndex], ...updates };
+        return DB.employees[employeeIndex];
+    }
+    
+    async getActiveEmployeeCount(): Promise<{count: number, limit: number | 'unlimited'}> {
+        const sub = await this.getSubscription('tenant_1');
+        const plan = sub ? PLANS[sub.planId] : null;
+        const limit = plan ? plan.userLimit : 0;
+        const count = DB.employees.filter(e => e.status === EmployeeStatus.ACTIVE).length;
+        return { count, limit };
     }
 }
 

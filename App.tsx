@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { User, Subscription } from './types';
+import { User, Subscription, SyncAction, UpdateInventoryPayload, OfflineScanPayload, WorkOrderLineItem } from './types';
 import { mockApi } from './services/mockApi';
 import LoginPage from './pages/Login';
 import BillingPage from './pages/Billing';
@@ -12,13 +12,21 @@ import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import InventoryPage from './pages/Inventory';
 import SettingsPage from './pages/Settings';
 import { syncQueue } from './services/syncQueue';
+import ScanHubPage from './pages/scan/ScanHubPage';
+import VrmScannerPage from './pages/scan/VrmScannerPage';
+import InventoryScannerPage from './pages/scan/InventoryScannerPage';
+import AdjustStockPage from './pages/inventory/AdjustStockPage';
+import OfflineQueuePage from './pages/offline/OfflineQueuePage';
+import HrHomePage from './pages/hr/HrHomePage';
+import EmployeeProfilePage from './pages/hr/EmployeeProfilePage';
 
 // --- OFFLINE/SYNC CONTEXT ---
 interface SyncContextType {
   isOnline: boolean;
   pendingActionCount: number;
+  syncNow: () => void;
 }
-const SyncContext = createContext<SyncContextType>({ isOnline: true, pendingActionCount: 0 });
+const SyncContext = createContext<SyncContextType>({ isOnline: true, pendingActionCount: 0, syncNow: () => {} });
 export const useSync = () => useContext(SyncContext);
 
 // --- AUTH CONTEXT ---
@@ -37,8 +45,51 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingActionCount, setPendingActionCount] = useState(syncQueue.getQueue().length);
 
+  const processSyncQueue = useCallback(async () => {
+    if (navigator.onLine && syncQueue.getQueue().length > 0) {
+        console.log('Online, processing sync queue...');
+        const actions = syncQueue.getQueue();
+        for (const action of actions) {
+            try {
+                switch(action.type) {
+                    case 'UPDATE_INVENTORY_ITEM': {
+                        const payload = action.payload as UpdateInventoryPayload;
+                        await mockApi.updateInventoryItem(payload.itemId, payload.updates);
+                        break;
+                    }
+                    case 'OFFLINE_SCAN_ADD_TO_WO': {
+                        const payload = action.payload as OfflineScanPayload;
+                        const foundItems = await mockApi.getInventoryItemsBySku(payload.sku);
+                        if (foundItems.length > 0) {
+                            const item = foundItems[0]; // Take the first match for offline sync
+                            const newItem: Omit<WorkOrderLineItem, 'id'> = {
+                                description: `${item.name} (${item.brand})`,
+                                quantity: payload.quantity,
+                                unitPrice: item.price,
+                                isVatable: true,
+                                type: 'part'
+                            };
+                            await mockApi.addLineItem(payload.workOrderId, newItem);
+                        } else {
+                            console.warn(`Offline Action: Item with SKU ${payload.sku} not found during sync. Action will be retried later.`);
+                            continue; // Skip removal, retry next time
+                        }
+                        break;
+                    }
+                }
+                syncQueue.removeAction(action.id);
+            } catch (error) {
+                console.error('Failed to sync action:', action, error);
+            }
+        }
+    }
+  }, []);
+
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      processSyncQueue();
+    };
     const handleOffline = () => setIsOnline(false);
     
     window.addEventListener('online', handleOnline);
@@ -54,27 +105,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       window.removeEventListener('offline', handleOffline);
       syncQueue.unsubscribe(handleQueueChange);
     };
-  }, []);
-
-  useEffect(() => {
-    const processSyncQueue = async () => {
-        if (isOnline && syncQueue.getQueue().length > 0) {
-            console.log('Online, processing sync queue...');
-            const actions = syncQueue.getQueue();
-            for (const action of actions) {
-                try {
-                    if (action.type === 'UPDATE_INVENTORY_ITEM') {
-                        await mockApi.updateInventoryItem(action.payload.itemId, action.payload.updates);
-                    }
-                    syncQueue.removeAction(action.id);
-                } catch (error) {
-                    console.error('Failed to sync action:', action, error);
-                }
-            }
-        }
-    };
-    processSyncQueue();
-  }, [isOnline]);
+  }, [processSyncQueue]);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -83,7 +114,8 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       setIsLoading(false);
     };
     checkUser();
-  }, []);
+    processSyncQueue(); // Initial check
+  }, [processSyncQueue]);
 
   const login = async (email: string) => {
     const loggedInUser = await mockApi.login(email);
@@ -101,7 +133,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   return (
     <AuthContext.Provider value={{ user, isLoading, login, logout }}>
-        <SyncContext.Provider value={{ isOnline, pendingActionCount }}>
+        <SyncContext.Provider value={{ isOnline, pendingActionCount, syncNow: processSyncQueue }}>
             {children}
         </SyncContext.Provider>
     </AuthContext.Provider>
@@ -118,9 +150,6 @@ interface SubscriptionContextType {
 const SubscriptionContext = createContext<SubscriptionContextType | null>(null);
 export const useSubscription = () => useContext(SubscriptionContext)!;
 
-// Fix: Updated SubscriptionProvider to work as a layout route element.
-// It no longer accepts `children` as a prop and instead renders an `<Outlet />`
-// to display nested routes, aligning with react-router-dom v6 patterns.
 const SubscriptionProvider: React.FC = () => {
     const { user } = useAuth();
     const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -193,8 +222,19 @@ function App() {
                   <Route path="work-orders" element={<WorkOrdersPage />} />
                   <Route path="work-orders/:workOrderId" element={<WorkOrderDetailPage />} />
                   <Route path="inventory" element={<InventoryPage />} />
+                  <Route path="inventory/adjust/:itemId" element={<AdjustStockPage />} />
                   <Route path="settings" element={<SettingsPage />} />
+                  <Route path="scan" element={<ScanHubPage />} />
+                  <Route path="offline/queue" element={<OfflineQueuePage />} />
+
+                  {/* HR Routes */}
+                  <Route path="hr" element={<HrHomePage />} />
+                  <Route path="hr/employees/new" element={<EmployeeProfilePage />} />
+                  <Route path="hr/employees/:employeeId" element={<EmployeeProfilePage />} />
                 </Route>
+                 {/* Full-screen routes without AppLayout chrome */}
+                 <Route path="/app/scan/vrm" element={<VrmScannerPage />} />
+                 <Route path="/app/scan/inventory" element={<InventoryScannerPage />} />
               </Route>
             </Route>
           </Route>

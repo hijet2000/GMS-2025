@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { GoogleGenAI, Type } from '@google/genai';
 import { mockApi } from '../services/mockApi';
 import { VehicleDetails, Customer, AiAssistedDiagnosis, MotHistoryItem } from '../types';
 import { SearchIcon, SparklesIcon, UserPlusIcon, ExclamationTriangleIcon, CameraIcon } from '../components/icons';
-import CameraScanner from '../components/CameraScanner';
 
 // --- Reusable Components ---
 const Section: React.FC<{ title: string; step: number; children: React.ReactNode; isComplete: boolean; isDisabled: boolean }> = ({ title, step, children, isComplete, isDisabled }) => (
@@ -78,8 +77,7 @@ const CheckInPage: React.FC = () => {
     const [isUrgent, setIsUrgent] = useState(false);
     
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isScanning, setIsScanning] = useState(false);
-
+    
     const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
 
     const handleVrmLookup = async (lookupVrm: string) => {
@@ -108,12 +106,6 @@ const CheckInPage: React.FC = () => {
         handleVrmLookup(vrm);
     };
 
-    const handleScanSuccess = (scannedVrm: string) => {
-        setIsScanning(false);
-        setVrm(scannedVrm);
-        handleVrmLookup(scannedVrm);
-    };
-    
     const handleManualVehicleSubmit = async (manualVehicle: Omit<VehicleDetails, 'motHistory' | 'motStatus' | 'motExpiry' | 'taxStatus'>) => {
         const fullVehicle: VehicleDetails = {
             ...manualVehicle,
@@ -212,7 +204,6 @@ const CheckInPage: React.FC = () => {
         try {
             const newWorkOrder = await mockApi.createWorkOrder({
                 customerId: selectedCustomer.id,
-                // FIX: The API expects `vehicleDetails`, not `vehicleVrm`. Pass the whole vehicle object.
                 vehicleDetails: vehicle,
                 issue,
                 isUrgent,
@@ -224,10 +215,6 @@ const CheckInPage: React.FC = () => {
             setIsSubmitting(false);
         }
     };
-
-    if (isScanning) {
-        return <CameraScanner mode="vrm" onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />;
-    }
 
     return (
         <div>
@@ -246,11 +233,11 @@ const CheckInPage: React.FC = () => {
                             className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                         <div className="flex gap-2">
-                           <button type="button" onClick={() => setIsScanning(true)} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                           <Link to="/app/scan/vrm" className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 h-[42px] min-w-[42px]">
                                <CameraIcon className="w-5 h-5" />
-                               <span>Scan</span>
-                           </button>
-                           <button type="submit" disabled={isVehicleLoading || !vrm} className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300">
+                               <span className="hidden sm:inline">Scan</span>
+                           </Link>
+                           <button type="submit" disabled={isVehicleLoading || !vrm} className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 h-[42px]">
                                {isVehicleLoading ? 'Searching...' : 'Search'}
                            </button>
                         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { mockApi } from '../services/mockApi';
 import { InventoryItem } from '../types';
 import { SearchIcon, CameraIcon } from '../components/icons';
@@ -6,7 +7,6 @@ import InventoryEditDrawer from '../components/InventoryEditDrawer';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatGbp } from '../utils/money';
 import ErrorState from '../components/ErrorState';
-import CameraScanner from '../components/CameraScanner';
 
 type StockStatus = 'all' | 'in-stock' | 'low-stock' | 'out-of-stock';
 
@@ -57,6 +57,7 @@ const InventoryCard: React.FC<{ item: InventoryItem, onClick: () => void }> = ({
 
 // --- Main Page Component ---
 const InventoryPage: React.FC = () => {
+    const navigate = useNavigate();
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -67,7 +68,6 @@ const InventoryPage: React.FC = () => {
     
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-    const [isScanning, setIsScanning] = useState(false);
 
     const fetchInventory = async () => {
         setIsLoading(true);
@@ -127,21 +127,6 @@ const InventoryPage: React.FC = () => {
         }
     };
 
-    const handleScanSuccess = (scannedSku: string) => {
-        setIsScanning(false);
-        const foundItem = inventory.find(item => item.sku === scannedSku);
-        if (foundItem) {
-            handleRowClick(foundItem);
-        } else {
-            // In a real app, show a "not found" toast
-            setSearchQuery(scannedSku);
-        }
-    };
-
-    if (isScanning) {
-        return <CameraScanner mode="barcode" onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />;
-    }
-
     return (
         <div>
             {selectedItem && (
@@ -163,10 +148,10 @@ const InventoryPage: React.FC = () => {
                             placeholder="Search SKU, name, brand..."
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full rounded-md border-gray-300 pl-10 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            className="w-full rounded-md border-gray-300 pl-10 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-[44px]"
                         />
                     </div>
-                     <button onClick={() => setIsScanning(true)} className="p-2.5 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                     <button onClick={() => navigate('/app/scan/inventory')} className="p-2.5 bg-gray-600 text-white rounded-md hover:bg-gray-700 h-[44px] w-[44px] flex items-center justify-center">
                         <CameraIcon className="w-5 h-5" />
                      </button>
                 </div>

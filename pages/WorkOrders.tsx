@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { mockApi } from '../services/mockApi';
@@ -131,12 +132,18 @@ const WorkOrdersPage: React.FC = () => {
             aValue = a[sortConfig.key as keyof WorkOrder];
             bValue = b[sortConfig.key as keyof WorkOrder];
         }
-        // FIX: Ensure correct type comparison for sorting. `aValue` and `bValue` can be strings or numbers.
+
+        if (aValue === null || aValue === undefined) return 1;
+        if (bValue === null || bValue === undefined) return -1;
+        
+        const direction = sortConfig.direction === 'ascending' ? 1 : -1;
+
         if (typeof aValue === 'string' && typeof bValue === 'string') {
-          return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+          return aValue.localeCompare(bValue) * direction;
         }
-        if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+        if (aValue < bValue) return -1 * direction;
+        if (aValue > bValue) return 1 * direction;
+        
         return 0;
       });
     }

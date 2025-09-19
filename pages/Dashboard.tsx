@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, Suspense, lazy, useMemo } from 'react';
 import { useAuth } from '../App';
 import { SparklesIcon, ChartBarIcon } from '../components/icons';
@@ -97,9 +99,6 @@ const DashboardPage: React.FC = () => {
   const hasWorkOrderData = data && Object.keys(data.workOrderStats).length > 0;
   const chartSuspenseFallback = <div className="h-full w-full flex items-center justify-center text-gray-500">Loading chart...</div>;
 
-  // FIX: Added useMemo to create a new array of objects for the PieChart.
-  // This resolves a TypeScript error where the `RevenueDataPoint` interface was not assignable
-  // to Recharts' expected data type due to missing an index signature.
   const pieChartData = useMemo(() => {
     if (!data?.revenueBreakdown) return [];
     return data.revenueBreakdown.map(item => ({ name: item.name, value: item.value }));
@@ -214,7 +213,8 @@ const DashboardPage: React.FC = () => {
                                 <Cell key={`cell-${index}`} fill={REVENUE_COLORS[index % REVENUE_COLORS.length]} />
                             ))}
                             </Pie>
-                            <Tooltip formatter={(value: number) => formatGbp(value * 100)} />
+                            {/* Fix: Ensure the formatter always returns a valid ReactNode (e.g., a string) to satisfy the type requirements of the recharts Tooltip component. */}
+                            <Tooltip formatter={(value: unknown) => typeof value === 'number' ? formatGbp(value * 100) : String(value)} />
                             <Legend />
                         </PieChart>
                     </ResponsiveContainer>

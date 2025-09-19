@@ -15,6 +15,13 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ mode, onScanSuccess, onCa
     let stream: MediaStream | null = null;
     const startCamera = async () => {
       try {
+        // In a real app, we would progressively enhance.
+        // First, check for the native BarcodeDetector API.
+        // if ('BarcodeDetector' in window) {
+        //   // Use native API for performance
+        // } else {
+        //   // Fallback to a JS-based library like zxing-js
+        // }
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' }
         });
@@ -36,22 +43,11 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ mode, onScanSuccess, onCa
     };
   }, []);
 
-  // Simulate a scan after a short delay
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      // In a real app, this would be the result from a scanning library
-      const mockValue = mode === 'vrm' ? 'AB12 CDE' : 'BOS-BR-1234';
-      onScanSuccess(mockValue);
-    }, 3000); // 3-second delay to simulate scanning
-
-    return () => clearTimeout(timer);
-  }, [mode, onScanSuccess]);
-
   const overlayClass = mode === 'vrm'
     ? 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-4 border-white border-dashed w-3/4 h-1/4 rounded-lg'
     : 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-4 border-white border-dashed w-3/4 h-1/2 rounded-lg';
 
-  const instructionText = mode === 'vrm' ? 'Align number plate with the rectangle' : 'Align barcode with the rectangle';
+  const instructionText = mode === 'vrm' ? 'Align number plate with the rectangle' : 'Align barcode/QR with the rectangle';
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center">
@@ -73,8 +69,27 @@ const CameraScanner: React.FC<CameraScannerProps> = ({ mode, onScanSuccess, onCa
         <XMarkIcon className="w-6 h-6" />
       </button>
 
-      <div className="absolute bottom-10 z-10 text-white text-sm">
-        <p>Simulating {mode} scan...</p>
+      <div className="absolute bottom-10 z-10 flex flex-col items-center gap-4">
+        <p className="text-white text-sm">Scanning Simulation</p>
+        <div className="flex gap-4">
+          <button
+            onClick={() => {
+              const mockValue = mode === 'vrm' ? 'AB12 CDE' : 'BOS-OIFI-A4B1';
+              onScanSuccess(mockValue);
+            }}
+            className="px-6 py-3 bg-white text-black font-semibold rounded-lg shadow-lg"
+          >
+            Simulate Scan (Single)
+          </button>
+          {mode === 'barcode' && (
+            <button
+              onClick={() => onScanSuccess('MUL-TI-1234')}
+              className="px-6 py-3 bg-yellow-400 text-black font-semibold rounded-lg shadow-lg"
+            >
+              Simulate Scan (Multi-match)
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

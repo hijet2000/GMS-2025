@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { mockApi, TECHNICIANS_LIST } from '../services/mockApi';
 import { WorkOrder, WorkOrderStatus, WorkOrderLineItem, VehicleDetails, LineItemType, TimeLog, GarageSettings } from '../types';
-import { ArrowLeftIcon, PlusIcon, PencilIcon, TrashIcon, StopwatchIcon, ClockIcon, DocumentDuplicateIcon } from '../components/icons';
+import { ArrowLeftIcon, PlusIcon, PencilIcon, TrashIcon, StopwatchIcon, ClockIcon, DocumentDuplicateIcon, CameraIcon } from '../components/icons';
 import Modal from '../components/Modal';
 import ErrorState from '../components/ErrorState';
 import { calculateWorkOrderTotals, formatGbp } from '../utils/money';
@@ -33,6 +33,7 @@ const VehicleStatusBadge: React.FC<{ status: 'Valid' | 'Expired' | 'Taxed' | 'Un
 // --- Main Component ---
 const WorkOrderDetailPage: React.FC = () => {
     const { workOrderId } = useParams<{ workOrderId: string }>();
+    const navigate = useNavigate();
     const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
     const [vehicleDetails, setVehicleDetails] = useState<VehicleDetails | null>(null);
     const [settings, setSettings] = useState<GarageSettings | null>(null);
@@ -171,17 +172,17 @@ const WorkOrderDetailPage: React.FC = () => {
             </Link>
             
             <div className="bg-white p-6 rounded-lg shadow mb-6">
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Work Order #{workOrder.id}</h1>
                         <p className="text-gray-500 mt-1">Last updated: {new Date(workOrder.lastUpdatedAt).toLocaleString()}</p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 w-full sm:w-auto">
                         {workOrder.isUrgent && <span className="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">URGENT</span>}
                         <select
                             value={workOrder.status}
                             onChange={(e) => handleStatusChange(e.target.value as WorkOrderStatus)}
-                            className={`px-3 py-1 text-sm font-semibold rounded-full border-none appearance-none ${statusColors[workOrder.status]} focus:ring-2 focus:ring-blue-500`}
+                            className={`px-3 py-1 text-sm font-semibold rounded-full border-none appearance-none ${statusColors[workOrder.status]} focus:ring-2 focus:ring-blue-500 w-full sm:w-auto`}
                         >
                             {Object.values(WorkOrderStatus).map(status => (
                                 <option key={status} value={status} disabled={status === WorkOrderStatus.INVOICED && !canBeInvoiced}>
@@ -215,11 +216,17 @@ const WorkOrderDetailPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                      <div className="bg-white p-6 rounded-lg shadow">
-                         <div className="flex justify-between items-center border-b pb-2 mb-4">
+                         <div className="flex flex-col sm:flex-row justify-between items-center border-b pb-2 mb-4 gap-2">
                              <h2 className="text-lg font-semibold">Financials</h2>
-                             <button onClick={() => handleOpenModal()} className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                                <PlusIcon className="w-4 h-4" /> Add Item
-                             </button>
+                             <div className="flex items-center gap-2">
+                                <button onClick={() => navigate('/app/scan/inventory', { state: { workOrderId: workOrder.id }})} className="flex items-center gap-1.5 px-3 py-1 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 h-[34px] min-w-[34px]">
+                                    <CameraIcon className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Add Part by Scan</span>
+                                </button>
+                                <button onClick={() => handleOpenModal()} className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 h-[34px]">
+                                    <PlusIcon className="w-4 h-4" /> Add Item
+                                </button>
+                             </div>
                          </div>
                          <table className="w-full text-sm">
                             <thead className="text-left text-gray-500">
@@ -398,10 +405,15 @@ const LineItemModal: React.FC<{
                         <input type="number" id="item-price" value={unitPrice} onChange={e => setUnitPrice(parseFloat(e.target.value) || 0)} step="0.01" required className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" />
                     </div>
                 </div>
-                {type === 'fee' && (
+                {type === 'fee' ? (
                     <div className="flex items-center">
                         <input type="checkbox" id="item-vatable" checked={isVatable} onChange={e => setIsVatable(e.target.checked)} className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
                         <label htmlFor="item-vatable" className="ml-2 block text-sm text-gray-900">VAT applicable</label>
+                    </div>
+                ) : (
+                    <div className="flex items-center">
+                        <input type="checkbox" id="item-vatable" checked={true} disabled className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                        <label htmlFor="item-vatable" className="ml-2 block text-sm text-gray-500">VAT applicable (required for Parts/Labour)</label>
                     </div>
                 )}
                  <div className="flex justify-end gap-2 pt-4">

@@ -1,12 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { SparklesIcon } from './icons';
+import { DashboardData } from '../types';
 
 interface AskAIModalProps {
   isOpen: boolean;
   onClose: () => void;
-  dashboardData: any;
-  // FIX: Added 'day' to the dateRange type to match the possible values from the Dashboard page.
+  dashboardData: DashboardData;
   dateRange: 'day' | 'week' | 'month';
 }
 

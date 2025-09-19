@@ -1,24 +1,22 @@
+
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { WorkOrder, GarageSettings } from '../types';
 import { formatGbp } from './money';
 
-// FIX: The manual module augmentation for 'jspdf' was removed from here.
-// It was causing a type error because the 'jspdf-autotable' library now 
-// includes its own type definitions that automatically augment jsPDF.
-// Extend jsPDF with the autoTable method
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
+// Extend jsPDF with the autoTable method - jspdf-autotable does this automatically with its import
+interface jsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: any) => jsPDF;
+  lastAutoTable: { finalY: number };
 }
+
 
 export const generateInvoicePdf = (
   workOrder: WorkOrder,
   settings: GarageSettings,
   totals: { net: number; vat: number; gross: number }
 ) => {
-  const doc = new jsPDF();
+  const doc = new jsPDF() as jsPDFWithAutoTable;
   const pageHeight = doc.internal.pageSize.height;
   let finalY = 0; // Keep track of the last y position
 
@@ -82,9 +80,7 @@ export const generateInvoicePdf = (
   });
 
   // Get the y position of the last row
-  // FIX: Updated to use the modern `lastAutoTable` property from `jspdf-autotable`
-  // instead of the deprecated `autoTable.previous` to get the table's final Y position.
-  finalY = (doc as any).lastAutoTable.finalY;
+  finalY = doc.lastAutoTable.finalY;
 
   // --- TOTALS ---
   const totalsX = 140;
